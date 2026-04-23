@@ -16,3 +16,4 @@ wheels/
 # LNbits
 lnbits-data/
 .env
+lnd-tls.cert

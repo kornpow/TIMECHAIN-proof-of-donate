@@ -115,6 +115,7 @@ def create_paylink(admin_key: str) -> dict:
             "comment_chars": 100,
             "webhook_url": WEBHOOK_URL,
             "success_text": "Thanks! Enjoy the music!",
+            "disposable": False,
         },
     )
     if r.status_code in (200, 201):

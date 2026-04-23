@@ -33,7 +33,7 @@ from ishelly.components.switch import SwitchSetParams
 
 SYSTEM = platform.system()
 SOCKET_PATH = Path(__file__).parent / ".bt-speaker.sock"
-SHELLY_HOST = "192.168.6.90"
+SHELLY_HOST = "172.20.10.2"
 
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
@@ -98,17 +98,20 @@ def set_audio_output(device_name: str) -> None:
 # ── Player daemon ─────────────────────────────────────────────────────────────
 
 class Player:
-    def __init__(self, path: str, volume: float, duration: float | None = None):
+    def __init__(self, path: str, volume: float, duration: float | None = None, no_outlet: bool = False):
         self.path = path
         self.volume = volume
         self.duration = duration  # seconds, or None = play full song
+        self.no_outlet = no_outlet
         self.state = "stopped"  # playing | paused | stopped | finished
-        self.shelly = ShellyPlug(SHELLY_HOST)
         self._start_time: float | None = None
 
     def _outlet(self, on: bool) -> None:
+        if self.no_outlet:
+            return
         try:
-            self.shelly.switch.set(SwitchSetParams(id=0, on=on))
+            p = ShellyPlug(SHELLY_HOST)
+            p.switch.set(SwitchSetParams(id=0, on=on))
             print(f"Outlet {'on' if on else 'off'}.")
         except Exception as e:
             print(f"Warning: could not set outlet: {e}")
@@ -189,7 +192,7 @@ def handle_client(conn: socket.socket, player: Player, stop_event: threading.Eve
             conn.sendall(f"error: {e}\n".encode())
 
 
-def run_daemon(path: str, volume: float, mac: str | None, audio_device: str | None, no_connect: bool, duration: float | None) -> None:
+def run_daemon(path: str, volume: float, mac: str | None, audio_device: str | None, no_connect: bool, duration: float | None, no_outlet: bool = False) -> None:
     if not no_connect:
         if not mac:
             print("ERROR: --mac required")
@@ -200,7 +203,7 @@ def run_daemon(path: str, volume: float, mac: str | None, audio_device: str | No
     if audio_device:
         set_audio_output(audio_device)
 
-    player = Player(path, volume, duration)
+    player = Player(path, volume, duration, no_outlet=no_outlet)
     player.start()
 
     # Clean up stale socket
@@ -267,6 +270,7 @@ def main() -> None:
     d.add_argument("--audio-device", default=None, help="(macOS) audio output device name")
     d.add_argument("--no-connect", action="store_true", help="Skip Bluetooth connection")
     d.add_argument("--duration", type=float, default=None, help="Stop after this many seconds (default: play full song)")
+    d.add_argument("--no-outlet", action="store_true", help="Skip Shelly outlet control")
     d.add_argument("--list-devices", action="store_true", help="List paired devices and exit")
 
     # control
@@ -286,6 +290,7 @@ def main() -> None:
             audio_device=args.audio_device,
             no_connect=args.no_connect,
             duration=args.duration,
+            no_outlet=args.no_outlet,
         )
     elif args.mode == "control":
         run_control(args.cmd)
