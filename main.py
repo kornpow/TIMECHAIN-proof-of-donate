@@ -55,7 +55,20 @@ def connect_speaker(mac: str, retries: int = 3) -> bool:
             except FileNotFoundError:
                 print("ERROR: blueutil not found. Install: brew install blueutil")
                 sys.exit(1)
-            result = subprocess.run(["blueutil", "--connect", mac], capture_output=True, text=True)
+            # Check if already connected first
+            chk = subprocess.run(["blueutil", "--is-connected", mac], capture_output=True, text=True)
+            if chk.stdout.strip() == "1":
+                print("Already connected.")
+                time.sleep(1)
+                return True
+            try:
+                result = subprocess.run(
+                    ["blueutil", "--connect", mac],
+                    capture_output=True, text=True, timeout=15
+                )
+            except subprocess.TimeoutExpired:
+                print(f"  Timed out connecting to {mac}")
+                continue
         else:
             result = subprocess.run(
                 ["bluetoothctl", "connect", mac], capture_output=True, text=True

@@ -18,8 +18,9 @@ import subprocess
 import time
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 
 app = FastAPI()
@@ -42,6 +43,7 @@ def send_control(cmd: str) -> str:
 
 def start_daemon() -> None:
     """Start the bt-speaker daemon as a background process."""
+    log = open("/tmp/daemon.log", "a")
     subprocess.Popen(
         [
             "uv", "run", "main.py", "daemon",
@@ -49,8 +51,8 @@ def start_daemon() -> None:
             "--file", MP3_FILE,
         ],
         cwd=Path(__file__).parent,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log,
+        stderr=log,
     )
 
 
@@ -128,7 +130,7 @@ async def qr_page():
       background: white;
       padding: 8px;
     }}
-    .lnurl {{
+    .code {{
       font-size: 0.65rem;
       color: #555;
       word-break: break-all;
@@ -141,17 +143,99 @@ async def qr_page():
       0%, 100% {{ opacity: 1; }}
       50% {{ opacity: 0.5; }}
     }}
+    button {{
+      background: #111;
+      color: #f7931a;
+      border: 2px solid #f7931a;
+      border-radius: 6px;
+      padding: 10px 24px;
+      font-family: monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }}
+    button:hover {{ background: #1a1a00; }}
+    #loading {{ color: #555; font-size: 0.9rem; min-height: 1.2em; }}
   </style>
 </head>
 <body>
   <h1>⚡ TIMECHAIN</h1>
   <p class="pulse">Donate sats → trigger the music</p>
-  <img src="{qr_url}" alt="LNURL QR Code">
-  <p>Scan with any Lightning wallet</p>
-  <div class="lnurl">{lnurl}</div>
+  <img id="qr-img" src="{qr_url}" alt="QR Code">
+  <p id="scan-hint">Scan with any Lightning wallet</p>
+  <div id="code-display" class="code">{lnurl}</div>
+  <div id="loading"></div>
+  <button id="toggle-btn" onclick="toggleMode()">Switch to Lightning Invoice</button>
+
+  <script>
+    const LNURL_QR = "{qr_url}";
+    const LNURL_CODE = "{lnurl}";
+    let mode = "lnurl"; // "lnurl" or "bolt11"
+
+    async function toggleMode() {{
+      const btn = document.getElementById("toggle-btn");
+      const img = document.getElementById("qr-img");
+      const hint = document.getElementById("scan-hint");
+      const code = document.getElementById("code-display");
+      const loading = document.getElementById("loading");
+
+      if (mode === "lnurl") {{
+        // Switch to bolt11
+        btn.disabled = true;
+        loading.textContent = "Generating invoice...";
+        try {{
+          const resp = await fetch("/invoice");
+          if (!resp.ok) throw new Error(await resp.text());
+          const data = await resp.json();
+          img.src = data.qr_url;
+          code.textContent = data.bolt11;
+          hint.textContent = "Scan with a Lightning wallet (single-use invoice)";
+          btn.textContent = "Switch to LNURL (reusable)";
+          mode = "bolt11";
+        }} catch (e) {{
+          loading.textContent = "Error: " + e.message;
+        }} finally {{
+          btn.disabled = false;
+          loading.textContent = "";
+        }}
+      }} else {{
+        // Switch back to LNURL
+        img.src = LNURL_QR;
+        code.textContent = LNURL_CODE;
+        hint.textContent = "Scan with any Lightning wallet";
+        btn.textContent = "Switch to Lightning Invoice";
+        mode = "lnurl";
+      }}
+    }}
+  </script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+@app.get("/invoice")
+async def create_invoice():
+    """Create a fresh bolt11 Lightning invoice and return its QR URL."""
+    if not STATE_FILE.exists():
+        raise HTTPException(status_code=503, detail="LNbits not configured yet.")
+
+    state = json.loads(STATE_FILE.read_text())
+    invoice_key = state["invoice_key"]
+    lnbits_url = state["lnbits_url"]
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{lnbits_url}/api/v1/payments",
+            headers={"X-Api-Key": invoice_key},
+            json={"out": False, "amount": 1, "memo": "TIMECHAIN donation"},
+        )
+    if resp.status_code != 201:
+        raise HTTPException(status_code=502, detail=f"LNbits error: {resp.text}")
+
+    data = resp.json()
+    payment_request = data["payment_request"]
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={payment_request}"
+    return JSONResponse({"bolt11": payment_request, "qr_url": qr_url})
 
 
 if __name__ == "__main__":

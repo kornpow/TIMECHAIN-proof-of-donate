@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.136.0",
+    "httpx>=0.28.1",
     "ishelly",
     "pygame>=2.6.1",
     "uvicorn>=0.45.0",
