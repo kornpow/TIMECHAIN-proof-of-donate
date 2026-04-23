@@ -1,13 +1,20 @@
-# bt-speaker
+# TIMECHAIN — Proof of Donate
 
-Play an MP3 through a Bluetooth speaker with synchronized Shelly outlet control.
+Donate sats over Lightning → music plays → Shelly outlet turns on.
 
-## What it does
+Built with Python, LNbits, pygame, blueutil, and ishelly.
 
-- Connects to a paired Bluetooth speaker via `blueutil` (macOS) or `bluetoothctl` (Linux)
-- Plays an MP3 using `pygame`
-- Turns a **Shelly Plus Plug US** outlet on/off in sync with playback
-- Runs as a background daemon controlled via a Unix socket (`.bt-speaker.sock` in the project dir)
+---
+
+## How it works
+
+1. **LNbits** runs a local Lightning wallet with a LNURL paylink
+2. A donor scans the QR code and sends sats
+3. LNbits fires a **webhook** to our FastAPI server
+4. The webhook starts the **bt-speaker daemon** which plays the MP3 over Bluetooth
+5. The **Shelly Plus Plug US** outlet turns on in sync with playback
+
+---
 
 ## Requirements
 
@@ -22,32 +29,50 @@ brew install switchaudio-osx  # optional, for auto audio routing
 sudo apt install bluez pulseaudio  # or pipewire-pulse
 ```
 
+**1Password CLI** (for credentials)
+```bash
+mise install 1password-cli
+```
+Secret references used:
+- `op://lightning-spore/LNbits-timechain/username`
+- `op://lightning-spore/LNbits-timechain/password`
+
+---
+
 ## Setup
 
 ```bash
+# 1. Install dependencies
 uv sync
+
+# 2. Copy and configure environment
+cp .env.example .env
+
+# 3. Start LNbits (must run from its package dir due to static file paths)
+cd ~/.local/share/uv/tools/lnbits/lib/python3.13/site-packages
+cp /path/to/timechain_project/.env .
+nohup lnbits > /tmp/lnbits.log 2>&1 &
+
+# 4. Start the webhook server
+cd /path/to/timechain_project
+nohup uv run webhook.py > /tmp/webhook.log 2>&1 &
+
+# 5. Run the one-time LNbits setup (installs lnurlp, creates paylink + webhook)
+uv run setup_lnbits.py
 ```
 
-## Usage
+Config is saved to `.lnbits-state.json` (gitignored — contains API keys).
 
-**Scan for / list paired devices**
-```bash
-# macOS
-blueutil --inquiry 10       # scan for nearby unpaired devices
-blueutil --paired           # list already paired devices
+---
 
-# Linux
-bluetoothctl devices
-```
+## Running
 
-Pair the speaker in your OS Bluetooth settings first, then:
-
-**Start the daemon**
+**Start the Bluetooth + Shelly daemon manually:**
 ```bash
 uv run main.py daemon --mac AA:BB:CC:DD:EE:FF --file song.mp3
 ```
 
-**Control playback** (from another terminal or programmatically)
+**Control playback:**
 ```bash
 uv run main.py control pause
 uv run main.py control resume
@@ -55,27 +80,40 @@ uv run main.py control stop
 uv run main.py control status
 ```
 
-**Options**
-
-| Flag | Description | Default |
-|---|---|---|
-| `--mac` | Bluetooth speaker MAC address | required |
-| `--file` | Path to MP3 file | required |
-| `--volume` | Volume 0.0–1.0 | `0.8` |
-| `--no-connect` | Skip Bluetooth connection step | — |
-| `--audio-device` | macOS output device name (requires `switchaudio-osx`) | — |
-| `--list-devices` | List paired Bluetooth devices and exit | — |
-
-## Shelly outlet
-
-The Shelly Plus Plug US at `192.168.6.90` is turned **on** when music starts and **off** when it stops or finishes. Configure the IP in `main.py`:
-
-```python
-SHELLY_HOST = "192.168.6.90"
+**Scan for nearby Bluetooth devices:**
+```bash
+blueutil --inquiry 10   # scan unpaired
+blueutil --paired       # list paired
 ```
+
+---
+
+## Endpoints
+
+| URL | Description |
+|---|---|
+| `http://localhost:5001` | LNbits wallet UI |
+| `http://localhost:8000/qr` | Fullscreen QR donation page (put this on a display screen) |
+| `http://localhost:8000/health` | Playback daemon status |
+| `http://localhost:8000/webhook` | LNbits payment webhook (POST) |
+
+---
+
+## Hardware
+
+| Device | Config |
+|---|---|
+| Bluetooth speaker | JBL Go 4 — MAC `90-f2-60-a7-d1-12` |
+| Smart outlet | Shelly Plus Plug US — `192.168.6.90` |
+
+To change these, edit `webhook.py` (`SPEAKER_MAC`) and `main.py` (`SHELLY_HOST`).
+
+---
 
 ## Notes
 
-- The Unix socket lives at `.bt-speaker.sock` in the project directory and is cleaned up on daemon exit.
-- **Linux**: audio routes via PulseAudio/PipeWire automatically once the speaker is connected.
-- **macOS**: if audio doesn't route automatically, pass `--audio-device "Your Speaker Name"`.
+- The Unix socket lives at `.bt-speaker.sock` in the project directory (gitignored)
+- LNbits state (wallet keys, LNURL, paylink ID) saved to `.lnbits-state.json` (gitignored)
+- macOS port 5000 is taken by Control Center — LNbits runs on **5001**
+- **Linux**: audio routes via PulseAudio/PipeWire automatically once speaker is connected
+- **macOS**: if audio doesn't route automatically, pass `--audio-device "Your Speaker Name"` to the daemon
