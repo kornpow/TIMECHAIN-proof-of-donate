@@ -98,11 +98,13 @@ def set_audio_output(device_name: str) -> None:
 # ── Player daemon ─────────────────────────────────────────────────────────────
 
 class Player:
-    def __init__(self, path: str, volume: float):
+    def __init__(self, path: str, volume: float, duration: float | None = None):
         self.path = path
         self.volume = volume
+        self.duration = duration  # seconds, or None = play full song
         self.state = "stopped"  # playing | paused | stopped | finished
         self.shelly = ShellyPlug(SHELLY_HOST)
+        self._start_time: float | None = None
 
     def _outlet(self, on: bool) -> None:
         try:
@@ -117,8 +119,10 @@ class Player:
         pygame.mixer.music.set_volume(max(0.0, min(1.0, self.volume)))
         pygame.mixer.music.play()
         self.state = "playing"
+        self._start_time = time.time()
         self._outlet(True)
-        print(f"Playing: {self.path}")
+        dur_str = f"{self.duration}s" if self.duration else "full song"
+        print(f"Playing: {self.path} ({dur_str})")
 
     def pause(self) -> str:
         if self.state == "playing":
@@ -143,11 +147,24 @@ class Player:
     def status(self) -> str:
         if self.state == "playing" and not pygame.mixer.music.get_busy():
             self.state = "finished"
+        # Normalize finished/stopped to idle for external callers
+        if self.state in ("finished", "stopped"):
+            return "idle"
         return self.state
 
     def tick(self) -> None:
-        """Update finished state if playback ended naturally."""
-        if self.state == "playing" and not pygame.mixer.music.get_busy():
+        """Update finished state if playback ended naturally or duration elapsed."""
+        if self.state != "playing":
+            return
+        # Duration limit
+        if self.duration and self._start_time and (time.time() - self._start_time) >= self.duration:
+            pygame.mixer.music.stop()
+            self.state = "finished"
+            self._outlet(False)
+            print(f"Duration limit reached ({self.duration}s).")
+            return
+        # Natural end
+        if not pygame.mixer.music.get_busy():
             self.state = "finished"
             self._outlet(False)
 
@@ -172,7 +189,7 @@ def handle_client(conn: socket.socket, player: Player, stop_event: threading.Eve
             conn.sendall(f"error: {e}\n".encode())
 
 
-def run_daemon(path: str, volume: float, mac: str | None, audio_device: str | None, no_connect: bool) -> None:
+def run_daemon(path: str, volume: float, mac: str | None, audio_device: str | None, no_connect: bool, duration: float | None) -> None:
     if not no_connect:
         if not mac:
             print("ERROR: --mac required")
@@ -183,7 +200,7 @@ def run_daemon(path: str, volume: float, mac: str | None, audio_device: str | No
     if audio_device:
         set_audio_output(audio_device)
 
-    player = Player(path, volume)
+    player = Player(path, volume, duration)
     player.start()
 
     # Clean up stale socket
@@ -249,6 +266,7 @@ def main() -> None:
     d.add_argument("--volume", type=float, default=0.8, help="Volume 0.0–1.0 (default: 0.8)")
     d.add_argument("--audio-device", default=None, help="(macOS) audio output device name")
     d.add_argument("--no-connect", action="store_true", help="Skip Bluetooth connection")
+    d.add_argument("--duration", type=float, default=None, help="Stop after this many seconds (default: play full song)")
     d.add_argument("--list-devices", action="store_true", help="List paired devices and exit")
 
     # control
@@ -267,6 +285,7 @@ def main() -> None:
             mac=args.mac,
             audio_device=args.audio_device,
             no_connect=args.no_connect,
+            duration=args.duration,
         )
     elif args.mode == "control":
         run_control(args.cmd)

@@ -34,26 +34,24 @@ SPEAKER_MAC = "90-f2-60-a7-d1-12"
 def send_control(cmd: str) -> str:
     """Send a command to the running bt-speaker daemon."""
     if not SOCKET_PATH.exists():
-        return "no_daemon"
+        return "idle"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
         s.connect(str(SOCKET_PATH))
         s.sendall(cmd.encode())
         return s.recv(256).decode().strip()
 
 
-def start_daemon() -> None:
+def start_daemon(duration: float | None = None) -> None:
     """Start the bt-speaker daemon as a background process."""
     log = open("/tmp/daemon.log", "a")
-    subprocess.Popen(
-        [
-            "uv", "run", "main.py", "daemon",
-            "--mac", SPEAKER_MAC,
-            "--file", MP3_FILE,
-        ],
-        cwd=Path(__file__).parent,
-        stdout=log,
-        stderr=log,
-    )
+    cmd = [
+        "uv", "run", "main.py", "daemon",
+        "--mac", SPEAKER_MAC,
+        "--file", MP3_FILE,
+    ]
+    if duration is not None:
+        cmd += ["--duration", str(duration)]
+    subprocess.Popen(cmd, cwd=Path(__file__).parent, stdout=log, stderr=log)
 
 
 @app.post("/webhook")
@@ -63,17 +61,20 @@ async def payment_webhook(request: Request):
     Starts music + outlet if not already playing, or restarts from the top.
     """
     body = await request.json()
-    print(f"Payment received: {body}")
+    amount_msat = body.get("amount", 0)
+    sats = max(1, int(amount_msat / 1000))
+    duration = float(sats)  # 1 second per sat
+    print(f"Payment received: {sats} sats → {duration}s of music")
 
     status = send_control("status")
 
     if status in ("playing", "paused"):
-        # Already running — restart from the top
+        # Already running — restart with new duration
         send_control("stop")
         time.sleep(1)
-        start_daemon()
-    elif status in ("stopped", "finished", "no_daemon"):
-        start_daemon()
+        start_daemon(duration)
+    elif status in ("idle", "stopped", "finished"):
+        start_daemon(duration)
     else:
         raise HTTPException(status_code=500, detail=f"Unexpected daemon status: {status}")
 
