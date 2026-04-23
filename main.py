@@ -32,7 +32,7 @@ from ishelly.components.switch import SwitchSetParams
 
 
 SYSTEM = platform.system()
-SOCKET_PATH = Path("/tmp/bt-speaker.sock")
+SOCKET_PATH = Path(__file__).parent / ".bt-speaker.sock"
 SHELLY_HOST = "192.168.6.90"
 
 
