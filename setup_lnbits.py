@@ -33,6 +33,7 @@ from pathlib import Path
 import requests
 
 LNBITS_URL = "http://localhost:5001"
+LNBITS_PUBLIC_URL = "https://soos-macbook-pro-2.tailb5a2b.ts.net"
 WEBHOOK_URL = "http://localhost:8000/webhook"
 STATE_FILE = Path(__file__).parent / ".lnbits-state.json"
 LNBITS_PKG_DIR = Path.home() / ".local/share/uv/tools/lnbits/lib/python3.13/site-packages"
@@ -116,6 +117,8 @@ def create_paylink(admin_key: str) -> dict:
             "webhook_url": WEBHOOK_URL,
             "success_text": "Thanks! Enjoy the music!",
             "disposable": False,
+            "domain": "soos-macbook-pro-2.tailb5a2b.ts.net",
+            "username": "timechain",
         },
     )
     if r.status_code in (200, 201):
@@ -140,10 +143,11 @@ def main() -> None:
     activate_extension(token)
     paylink = create_paylink(admin_key)
 
-    qr_url = f"{LNBITS_URL}/api/v1/qrcode/{paylink['lnurl']}"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={paylink['lnurl']}"
 
     state = {
         "lnbits_url": LNBITS_URL,
+        "lnbits_public_url": LNBITS_PUBLIC_URL,
         "webhook_url": WEBHOOK_URL,
         "wallet_id": wallet_id,
         "admin_key": admin_key,
@@ -156,10 +160,11 @@ def main() -> None:
     save_state(state)
 
     print("\n--- Setup complete ---")
-    print(f"  LNbits UI:  {LNBITS_URL}")
-    print(f"  LNURL:      {paylink['lnurl']}")
-    print(f"  QR code:    {qr_url}")
-    print(f"  Webhook:    {WEBHOOK_URL}")
+    print(f"  LNbits UI (local): {LNBITS_URL}")
+    print(f"  LNbits (public):   {LNBITS_PUBLIC_URL}")
+    print(f"  LNURL:             {paylink['lnurl']}")
+    print(f"  QR code:           {qr_url}")
+    print(f"  Webhook:           {WEBHOOK_URL}")
 
 
 if __name__ == "__main__":
