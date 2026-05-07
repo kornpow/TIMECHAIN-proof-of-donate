@@ -1,44 +1,82 @@
 """
 Webhook receiver for LNbits payment events.
 
-LNbits fires a POST to /webhook when a payment is received.
-This triggers the bt-speaker daemon to play music and turns on the Shelly outlet.
+LNbits fires a POST to /webhook when a payment is received via the lnurlp paylink.
+On payment:
+  - Pulses the Shelly outlet for 2 seconds
+  - Optionally plays music via the bt-speaker daemon (1 sat = 1 second)
+
+A fallback poller checks LNbits every 5s so payments are never missed even
+if the LNbits→webhook call drops (e.g. LND invoice stream dropout over Tailscale).
 
 Endpoints:
   POST /webhook   — called by LNbits on payment received
-  GET  /health    — returns current daemon playback status
-  GET  /qr        — displays a fullscreen HTML QR code page for donations
+  GET  /health    — stack health check
+  GET  /qr        — fullscreen QR donation page
+  GET  /invoice   — create a bolt11 invoice for a given sat amount
 
 Run: uv run webhook.py
 """
 
+import asyncio
 import json
 import socket
 import subprocess
 import time
+import threading
 from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
+from ishelly.client import ShellyPlug
+from ishelly.components.switch import SwitchSetParams
 import uvicorn
 
 app = FastAPI()
 
-SOCKET_PATH = Path(__file__).parent / ".bt-speaker.sock"
-STATE_FILE = Path(__file__).parent / ".lnbits-state.json"
+SHELLY_HOST = "192.168.1.224"
+OUTLET_PULSE_SECONDS = 2
+
 MP3_FILE = "timechain-song_this-is-no-me-there-is-no-you.mp3"
 SPEAKER_MAC = "90-f2-60-a7-d1-12"
 
+STATE_FILE = Path(__file__).parent / ".lnbits-state.json"
+SOCKET_PATH = Path(__file__).parent / ".bt-speaker.sock"
+
+# Set of payment hashes we've already acted on.
+# Seeded at startup with all historical payments so we never replay history.
+_seen_hashes: set[str] = set()
+
+
+# ── Shelly outlet ─────────────────────────────────────────────────────────────
+
+def pulse_outlet(seconds: float = OUTLET_PULSE_SECONDS) -> None:
+    """Turn the Shelly outlet on, wait, then turn it off."""
+    try:
+        plug = ShellyPlug(SHELLY_HOST)
+        plug.switch.set(SwitchSetParams(id=0, on=True))
+        print(f"Outlet ON ({seconds}s)")
+        time.sleep(seconds)
+        plug.switch.set(SwitchSetParams(id=0, on=False))
+        print("Outlet OFF")
+    except Exception as e:
+        print(f"[outlet] error: {e}")
+
+
+# ── BT speaker daemon ─────────────────────────────────────────────────────────
 
 def send_control(cmd: str) -> str:
-    """Send a command to the running bt-speaker daemon."""
+    """Send a command to the running bt-speaker daemon via Unix socket."""
     if not SOCKET_PATH.exists():
         return "idle"
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-        s.connect(str(SOCKET_PATH))
-        s.sendall(cmd.encode())
-        return s.recv(256).decode().strip()
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.connect(str(SOCKET_PATH))
+            s.sendall(cmd.encode())
+            return s.recv(256).decode().strip()
+    except Exception:
+        return "idle"
 
 
 def start_daemon(duration: float | None = None) -> None:
@@ -54,42 +92,71 @@ def start_daemon(duration: float | None = None) -> None:
     subprocess.Popen(cmd, cwd=Path(__file__).parent, stdout=log, stderr=log)
 
 
-@app.post("/webhook")
-async def payment_webhook(request: Request):
-    """
-    Called by LNbits when a payment is received.
-    Starts music + outlet if not already playing, or restarts from the top.
-    """
-    body = await request.json()
-    amount_msat = body.get("amount", 0)
-    sats = max(1, int(amount_msat / 1000))
-    duration = float(sats)  # 1 second per sat
-    print(f"Payment received: {sats} sats → {duration}s of music")
-
+def trigger_music(sats: int) -> None:
+    """Start or restart the bt-speaker daemon for the given sat amount (1 sat = 1 second)."""
+    duration = float(sats)
+    print(f"Music trigger: {sats} sats → {duration}s")
     status = send_control("status")
-
     if status in ("playing", "paused"):
-        # Already running — restart with new duration
         send_control("stop")
         time.sleep(1)
-        start_daemon(duration)
-    elif status in ("idle", "stopped", "finished"):
-        start_daemon(duration)
-    else:
-        raise HTTPException(status_code=500, detail=f"Unexpected daemon status: {status}")
+    start_daemon(duration)
 
+
+# ── Payment handler ───────────────────────────────────────────────────────────
+
+def handle_payment(sats: int, source: str = "webhook") -> None:
+    """
+    Called whenever a new payment is confirmed.
+    - Always pulses the Shelly outlet for OUTLET_PULSE_SECONDS
+    - Also triggers music (1 sat = 1 second) via bt-speaker daemon
+    Both run in background threads so the event loop isn't blocked.
+    """
+    print(f"[{source}] Payment confirmed: {sats} sats")
+    threading.Thread(target=pulse_outlet, args=(OUTLET_PULSE_SECONDS,), daemon=True).start()
+    threading.Thread(target=trigger_music, args=(sats,), daemon=True).start()
+
+
+# ── Webhook endpoint ──────────────────────────────────────────────────────────
+
+@app.post("/webhook")
+async def payment_webhook(request: Request):
+    """Called by LNbits lnurlp when a payment is received."""
+    body = await request.json()
+    payment_hash = body.get("payment_hash", "")
+    amount_msat = body.get("amount", 0)
+    sats = max(1, int(amount_msat / 1000))
+
+    if payment_hash and payment_hash in _seen_hashes:
+        print(f"[webhook] duplicate {payment_hash[:12]}... — ignored")
+        return {"status": "ok", "triggered": False, "reason": "duplicate"}
+
+    if payment_hash:
+        _seen_hashes.add(payment_hash)
+
+    handle_payment(sats, source="webhook")
     return {"status": "ok", "triggered": True}
 
 
+# ── Health ────────────────────────────────────────────────────────────────────
+
 @app.get("/health")
 async def health():
-    status = send_control("status")
-    return {"daemon": status}
+    try:
+        plug = ShellyPlug(SHELLY_HOST)
+        status = plug.switch.get_status(0)
+        outlet = "on" if status.output else "off"
+    except Exception:
+        outlet = "unreachable"
+    daemon = send_control("status")
+    return {"outlet": outlet, "daemon": daemon}
 
+
+# ── QR donation page ──────────────────────────────────────────────────────────
 
 @app.get("/qr", response_class=HTMLResponse)
 async def qr_page():
-    """Fullscreen QR code donation page — open on any display screen."""
+    """Fullscreen QR code donation page."""
     if not STATE_FILE.exists():
         raise HTTPException(
             status_code=503,
@@ -99,7 +166,6 @@ async def qr_page():
     state = json.loads(STATE_FILE.read_text())
     qr_url = state["qr_url"]
     lnurl = state["lnurl"]
-    lnbits_url = state["lnbits_url"]
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -180,7 +246,7 @@ async def qr_page():
 </head>
 <body>
   <h1>⚡ TIMECHAIN</h1>
-  <p class="pulse" id="tagline">Donate sats → trigger the music</p>
+  <p class="pulse" id="tagline">Donate sats → trigger the outlet</p>
   <img id="qr-img" src="{qr_url}" alt="QR Code">
   <p id="scan-hint">Scan with any Lightning wallet</p>
   <div id="code-display" class="code">{lnurl}</div>
@@ -205,7 +271,7 @@ async def qr_page():
         document.getElementById("toggle-btn").textContent = "Switch to LNURL (reusable)";
         document.getElementById("scan-hint").textContent = "Enter sats and generate a Lightning invoice";
         document.getElementById("code-display").textContent = "";
-        document.getElementById("qr-img").src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // blank
+        document.getElementById("qr-img").src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
         document.getElementById("tagline").classList.remove("pulse");
         document.getElementById("tagline").textContent = "1 sat = 1 second of music";
       }} else {{
@@ -216,7 +282,7 @@ async def qr_page():
         document.getElementById("code-display").textContent = LNURL_CODE;
         document.getElementById("qr-img").src = LNURL_QR;
         document.getElementById("tagline").classList.add("pulse");
-        document.getElementById("tagline").textContent = "Donate sats → trigger the music";
+        document.getElementById("tagline").textContent = "Donate sats → trigger the outlet";
         document.getElementById("loading").textContent = "";
       }}
     }}
@@ -250,6 +316,8 @@ async def qr_page():
     return HTMLResponse(content=html)
 
 
+# ── Invoice endpoint ──────────────────────────────────────────────────────────
+
 @app.get("/invoice")
 async def create_invoice(amount: int = 1):
     """Create a fresh bolt11 Lightning invoice for `amount` sats and return its QR URL."""
@@ -259,13 +327,10 @@ async def create_invoice(amount: int = 1):
         raise HTTPException(status_code=400, detail="Amount must be at least 1 sat.")
 
     state = json.loads(STATE_FILE.read_text())
-    invoice_key = state["invoice_key"]
-    lnbits_url = state["lnbits_url"]
-
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{lnbits_url}/api/v1/payments",
-            headers={"X-Api-Key": invoice_key},
+            f"{state['lnbits_url']}/api/v1/payments",
+            headers={"X-Api-Key": state["invoice_key"]},
             json={
                 "out": False,
                 "amount": amount,
@@ -280,6 +345,72 @@ async def create_invoice(amount: int = 1):
     payment_request = data["payment_request"]
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={payment_request}"
     return JSONResponse({"bolt11": payment_request, "qr_url": qr_url, "amount": amount})
+
+
+# ── Fallback poller ───────────────────────────────────────────────────────────
+
+async def poll_lnbits_payments() -> None:
+    """
+    Polls LNbits every 5s for newly settled payments.
+
+    Protects against the LND invoice stream dropping over Tailscale — if LNbits
+    never fires the webhook, this catches the payment within ~5 seconds.
+
+    On startup it seeds _seen_hashes with ALL existing payments (any status)
+    so we never act on history — only genuinely new settlements trigger anything.
+    """
+    # Give LNbits a moment to start, then seed all historical hashes
+    await asyncio.sleep(5)
+    if STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            async with httpx.AsyncClient(timeout=8) as client:
+                resp = await client.get(
+                    f"{state.get('lnbits_url', 'http://localhost:5001')}/api/v1/payments?limit=200",
+                    headers={"X-Api-Key": state["invoice_key"]},
+                )
+            if resp.status_code == 200:
+                for p in resp.json():
+                    if p.get("payment_hash"):
+                        _seen_hashes.add(p["payment_hash"])
+                print(f"[poller] seeded {len(_seen_hashes)} hashes — ready, watching for new payments")
+            else:
+                print(f"[poller] seed failed: HTTP {resp.status_code}")
+        except Exception as e:
+            print(f"[poller] seed error: {e}")
+
+    while True:
+        await asyncio.sleep(5)
+        if not STATE_FILE.exists():
+            continue
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(
+                    f"{state.get('lnbits_url', 'http://localhost:5001')}/api/v1/payments?limit=10",
+                    headers={"X-Api-Key": state["invoice_key"]},
+                )
+            if resp.status_code != 200:
+                continue
+            for p in resp.json():
+                if p.get("status") != "success":
+                    continue
+                if p.get("amount", 0) <= 0:  # skip outgoing
+                    continue
+                ph = p.get("payment_hash", "")
+                if not ph or ph in _seen_hashes:
+                    continue
+                # New settled payment the webhook missed
+                _seen_hashes.add(ph)
+                sats = p["amount"] // 1000
+                handle_payment(sats, source="poller")
+        except Exception as e:
+            print(f"[poller] error: {e}")
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    asyncio.create_task(poll_lnbits_payments())
 
 
 if __name__ == "__main__":
