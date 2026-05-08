@@ -104,7 +104,7 @@ def cmd_update(args):
         "username":    args.username or current.get("username", slot["username"]),
         "domain":      current.get("domain", "soos-macbook-pro-2.tailb5a2b.ts.net"),
         "webhook_url": args.webhook or current.get("webhook_url", slot["webhook_url"]),
-        "comment_chars": current.get("comment_chars", 0),
+        "comment_chars": current.get("comment_chars", 255),
     }
 
     result = api_put(state, f"/lnurlp/api/v1/links/{lid}", payload)
