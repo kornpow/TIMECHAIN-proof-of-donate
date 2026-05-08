@@ -35,7 +35,7 @@ import uvicorn
 
 app = FastAPI()
 
-SHELLY_HOST = "192.168.1.224"
+SHELLY_HOST = "172.20.10.2"
 OUTLET_PULSE_SECONDS = 2
 
 MP3_FILE = "timechain-song_this-is-no-me-there-is-no-you.mp3"
@@ -143,9 +143,9 @@ async def payment_webhook(request: Request):
 @app.get("/health")
 async def health():
     try:
-        plug = ShellyPlug(SHELLY_HOST)
-        status = plug.switch.get_status(0)
-        outlet = "on" if status.output else "off"
+        import httpx as _httpx
+        r = _httpx.get(f"http://{SHELLY_HOST}/rpc/Switch.GetStatus?id=0", timeout=3)
+        outlet = "on" if r.json().get("output") else "off"
     except Exception:
         outlet = "unreachable"
     daemon = send_control("status")
@@ -393,17 +393,21 @@ async def poll_lnbits_payments() -> None:
             if resp.status_code != 200:
                 continue
             for p in resp.json():
-                if p.get("status") != "success":
+                # Accept both success and pending incoming payments.
+                # Pending = LNbits hasn't confirmed with LND yet, but Lightning
+                # is instant — if it's pending and incoming it almost certainly settled.
+                if p.get("status") not in ("success", "pending"):
                     continue
                 if p.get("amount", 0) <= 0:  # skip outgoing
                     continue
                 ph = p.get("payment_hash", "")
                 if not ph or ph in _seen_hashes:
                     continue
-                # New settled payment the webhook missed
+                # New payment the webhook missed
                 _seen_hashes.add(ph)
                 sats = p["amount"] // 1000
-                handle_payment(sats, source="poller")
+                status = p.get("status")
+                handle_payment(sats, source=f"poller({status})")
         except Exception as e:
             print(f"[poller] error: {e}")
 
