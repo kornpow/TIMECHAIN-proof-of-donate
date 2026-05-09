@@ -5,7 +5,7 @@
     "username": "timechain1",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMXFDA85JNP5PD5NQ",
     "lightning_address": "timechain1@timechain.win",
-    "description": "TIMECHAIN #1"
+    "description": "LIGHTNING JAR TIPS"
   },
   {
     "slot": 2,
@@ -13,7 +13,7 @@
     "username": "timechain2",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMX2E58W52YGL3LFX",
     "lightning_address": "timechain2@timechain.win",
-    "description": "TIMECHAIN #2"
+    "description": "DOMI TAKE IT DOWN"
   },
   {
     "slot": 3,
@@ -21,7 +21,7 @@
     "username": "timechain3",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT6CXAS564PE36TQW6",
     "lightning_address": "timechain3@timechain.win",
-    "description": "TIMECHAIN #3"
+    "description": "DOMI KEEP IT UP"
   },
   {
     "slot": 4,
@@ -29,7 +29,7 @@
     "username": "timechain4",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTE525U5YETHASNZLU",
     "lightning_address": "timechain4@timechain.win",
-    "description": "TIMECHAIN #4"
+    "description": "OK TYLER"
   },
   {
     "slot": 5,
@@ -37,7 +37,7 @@
     "username": "timechain5",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT6YWF9HQW28F90KYK",
     "lightning_address": "timechain5@timechain.win",
-    "description": "TIMECHAIN #5"
+    "description": "NICE TYLER"
   },
   {
     "slot": 6,
@@ -45,7 +45,7 @@
     "username": "timechain6",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMWDPUXU6JNW25MS5",
     "lightning_address": "timechain6@timechain.win",
-    "description": "TIMECHAIN #6"
+    "description": "AWESOME TYLER"
   },
   {
     "slot": 7,
@@ -53,7 +53,7 @@
     "username": "timechain7",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMZGFVY6EJTCY5YRG",
     "lightning_address": "timechain7@timechain.win",
-    "description": "TIMECHAIN #7"
+    "description": "OK SWANN"
   },
   {
     "slot": 8,
@@ -61,7 +61,7 @@
     "username": "timechain8",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTECFDZYW3Z9HR4RZH",
     "lightning_address": "timechain8@timechain.win",
-    "description": "TIMECHAIN #8"
+    "description": "NICE SWANN"
   },
   {
     "slot": 9,
@@ -69,7 +69,7 @@
     "username": "timechain9",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT6JW9TKJA3JR9WAJ2",
     "lightning_address": "timechain9@timechain.win",
-    "description": "TIMECHAIN #9"
+    "description": "AWESOME SWANN"
   },
   {
     "slot": 10,
@@ -77,7 +77,7 @@
     "username": "timechain10",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTECG42NW5EH2FHDNK",
     "lightning_address": "timechain10@timechain.win",
-    "description": "TIMECHAIN #10"
+    "description": "OK MARK.L"
   },
   {
     "slot": 11,
@@ -85,7 +85,7 @@
     "username": "timechain11",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT650GM4QU34XNZ65G",
     "lightning_address": "timechain11@timechain.win",
-    "description": "TIMECHAIN #11"
+    "description": "NICE MARK.L"
   },
   {
     "slot": 12,
@@ -93,7 +93,7 @@
     "username": "timechain12",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMGTP4KXV3NP4J7FF",
     "lightning_address": "timechain12@timechain.win",
-    "description": "TIMECHAIN #12"
+    "description": "AWESOME MARK.L"
   },
   {
     "slot": 13,
@@ -101,7 +101,7 @@
     "username": "timechain13",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTE4G92NYCMNUFMY3W",
     "lightning_address": "timechain13@timechain.win",
-    "description": "TIMECHAIN #13"
+    "description": "OK CATERING"
   },
   {
     "slot": 14,
@@ -109,7 +109,7 @@
     "username": "timechain14",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMTW44RJJMT8N24EM",
     "lightning_address": "timechain14@timechain.win",
-    "description": "TIMECHAIN #14"
+    "description": "NICE CATERING"
   },
   {
     "slot": 15,
@@ -117,7 +117,7 @@
     "username": "timechain15",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT6DVF4XG46VFE7RL3",
     "lightning_address": "timechain15@timechain.win",
-    "description": "TIMECHAIN #15"
+    "description": "AWESOME CATERING"
   },
   {
     "slot": 16,
@@ -125,7 +125,7 @@
     "username": "timechain16",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT6E29TNVET5KUGL9Y",
     "lightning_address": "timechain16@timechain.win",
-    "description": "TIMECHAIN #16"
+    "description": "OK MANIFESTO"
   },
   {
     "slot": 17,
@@ -133,7 +133,7 @@
     "username": "timechain17",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QTMP2EGKU3TR9V8MWJ",
     "lightning_address": "timechain17@timechain.win",
-    "description": "TIMECHAIN #17"
+    "description": "NICE MANIFESTO"
   },
   {
     "slot": 18,
@@ -141,6 +141,6 @@
     "username": "timechain18",
     "lnurl": "LNURL1DP68GURN8GHJ7ARFD4JKX6RPD9HZUAMFDCHKCMN4WFK8QT6V0G65GN2NAK3YKC",
     "lightning_address": "timechain18@timechain.win",
-    "description": "TIMECHAIN #18"
+    "description": "AWESOME MANIFESTO"
   }
 ]
