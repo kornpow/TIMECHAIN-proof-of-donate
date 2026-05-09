@@ -8,10 +8,7 @@ dependencies = [
     "bech32>=1.2.0",
     "fastapi>=0.136.0",
     "httpx>=0.28.1",
-    "ishelly",
+    "ishelly>=0.1.7",
     "pygame>=2.6.1",
     "uvicorn>=0.45.0",
 ]
-
-[tool.uv.sources]
-ishelly = { path = "../ishelly", editable = true }

@@ -54,14 +54,6 @@
 
     # ── Repos ─────────────────────────────────────────────────────────────────
 
-    - name: Clone ishelly
-      become: false
-      git:
-        repo: https://github.com/kornpow/ishelly.git
-        dest: "{{ ishelly_dir }}"
-        version: main
-        update: true
-
     - name: Clone timechain_project
       become: false
       git:
