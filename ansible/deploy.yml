@@ -21,6 +21,7 @@
     app_user: pi
     app_dir: /home/pi/timechain_project
     python_version: "3.13"
+    cloudflare_tunnel_id: ""   # fill in after: cloudflared tunnel create timechain
 
   tasks:
 
@@ -177,6 +178,50 @@
           [Install]
           WantedBy=multi-user.target
 
+    # ── Cloudflare Tunnel (cloudflared) ──────────────────────────────────────
+
+    - name: Check if cloudflared is installed
+      stat:
+        path: /usr/local/bin/cloudflared
+      register: cloudflared_bin
+
+    - name: Download cloudflared (arm64)
+      get_url:
+        url: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
+        dest: /usr/local/bin/cloudflared
+        mode: "0755"
+      when: not cloudflared_bin.stat.exists
+
+    - name: Copy cloudflared tunnel credentials
+      become: false
+      copy:
+        src: ../cloudflare-tunnel-credentials.json   # generate on Mac, copy here
+        dest: /home/{{ app_user }}/.cloudflared/credentials.json
+        mode: "0600"
+        directory_mode: "0700"
+      tags: app
+
+    - name: Install cloudflared tunnel config
+      become: false
+      copy:
+        dest: /home/{{ app_user }}/.cloudflared/config.yml
+        mode: "0600"
+        content: |
+          tunnel: {{ cloudflare_tunnel_id }}
+          credentials-file: /home/{{ app_user }}/.cloudflared/credentials.json
+          ingress:
+            - hostname: timechain.dev
+              service: http://localhost:5001
+            - hostname: pay.timechain.dev
+              service: http://localhost:5001
+            - service: http_status:404
+      tags: app
+
+    - name: Install cloudflared systemd service
+      shell: cloudflared service install
+      args:
+        creates: /etc/systemd/system/cloudflared.service
+
     # ── Enable & start services ───────────────────────────────────────────────
 
     - name: Reload systemd and enable services
@@ -188,4 +233,5 @@
       loop:
         - lnbits
         - timechain-webhook
+        - cloudflared
       tags: app
