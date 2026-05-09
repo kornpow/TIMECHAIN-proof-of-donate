@@ -1,0 +1,180 @@
+---
+# TIMECHAIN — Raspberry Pi deployment
+# Installs LNbits + webhook server as systemd services.
+#
+# Prerequisites on your Mac:
+#   brew install ansible
+#   ansible-galaxy collection install community.general
+#
+# Usage:
+#   cp ansible/env.example .env          # fill in your secrets
+#   ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+#
+# Re-deploy after code changes:
+#   ansible-playbook -i ansible/inventory.ini ansible/deploy.yml --tags app
+
+- name: Deploy TIMECHAIN to Raspberry Pi
+  hosts: timechain
+  become: true
+
+  vars:
+    app_user: pi
+    app_dir: /home/pi/timechain_project
+    ishelly_dir: /home/pi/ishelly
+    python_version: "3.13"
+
+  tasks:
+
+    # ── System packages ───────────────────────────────────────────────────────
+
+    - name: Install system dependencies
+      apt:
+        name:
+          - git
+          - curl
+          - ca-certificates
+          - libsdl2-mixer-2.0-0   # pygame audio
+          - libsdl2-2.0-0
+          - bluez                  # Bluetooth
+          - python3-dbus           # BT dbus bindings
+        state: present
+        update_cache: true
+
+    # ── uv ────────────────────────────────────────────────────────────────────
+
+    - name: Check if uv is installed
+      stat:
+        path: /home/{{ app_user }}/.local/bin/uv
+      register: uv_bin
+
+    - name: Install uv
+      become: false
+      shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+      when: not uv_bin.stat.exists
+
+    # ── Repos ─────────────────────────────────────────────────────────────────
+
+    - name: Clone ishelly
+      become: false
+      git:
+        repo: https://github.com/kornpow/ishelly.git
+        dest: "{{ ishelly_dir }}"
+        version: main
+        update: true
+
+    - name: Clone timechain_project
+      become: false
+      git:
+        repo: https://github.com/kornpow/TIMECHAIN-proof-of-donate.git
+        dest: "{{ app_dir }}"
+        version: main
+        update: true
+      tags: app
+
+    # ── Config ────────────────────────────────────────────────────────────────
+
+    - name: Copy .env file
+      become: false
+      copy:
+        src: ../.env          # from your local project root
+        dest: "{{ app_dir }}/.env"
+        mode: "0600"
+      tags: app
+
+    # ── Python deps ───────────────────────────────────────────────────────────
+
+    - name: Install Python dependencies via uv
+      become: false
+      shell: |
+        export PATH="$HOME/.local/bin:$PATH"
+        cd {{ app_dir }}
+        uv sync
+      tags: app
+
+    - name: Install LNbits via uv tools
+      become: false
+      shell: |
+        export PATH="$HOME/.local/bin:$PATH"
+        uv tool install lnbits
+      args:
+        creates: /home/{{ app_user }}/.local/bin/lnbits
+
+    # ── Sync .env into LNbits package dir ────────────────────────────────────
+
+    - name: Find LNbits data dir
+      become: false
+      shell: |
+        export PATH="$HOME/.local/bin:$PATH"
+        dirname $(uv tool run lnbits --help 2>&1; find /home/{{ app_user }}/.local -name "lnbits" -type f 2>/dev/null | head -1)
+      register: lnbits_bin
+      changed_when: false
+
+    - name: Copy .env into LNbits package dir
+      become: false
+      shell: |
+        export PATH="$HOME/.local/bin:$PATH"
+        LNBITS_DIR=$(find /home/{{ app_user }}/.local/share/uv -name "data.db" 2>/dev/null | head -1 | xargs dirname 2>/dev/null || \
+                     find /home/{{ app_user }}/.local/share/uv -path "*/lnbits/lib/*/site-packages" -type d | head -1)
+        cp {{ app_dir }}/.env "$LNBITS_DIR/.env"
+      tags: app
+
+    # ── systemd: LNbits ───────────────────────────────────────────────────────
+
+    - name: Install LNbits systemd service
+      copy:
+        dest: /etc/systemd/system/lnbits.service
+        content: |
+          [Unit]
+          Description=LNbits Lightning Payment Server
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          User={{ app_user }}
+          WorkingDirectory={{ app_dir }}
+          Environment="PATH=/home/{{ app_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+          ExecStart=/home/{{ app_user }}/.local/bin/uv tool run lnbits --port 5001
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+
+    # ── systemd: webhook server ───────────────────────────────────────────────
+
+    - name: Install webhook systemd service
+      copy:
+        dest: /etc/systemd/system/timechain-webhook.service
+        content: |
+          [Unit]
+          Description=TIMECHAIN Webhook Server
+          After=lnbits.service
+          Wants=lnbits.service
+
+          [Service]
+          User={{ app_user }}
+          WorkingDirectory={{ app_dir }}
+          Environment="PATH=/home/{{ app_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+          ExecStart=/home/{{ app_user }}/.local/bin/uv run webhook.py
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+
+    # ── Enable & start services ───────────────────────────────────────────────
+
+    - name: Reload systemd and enable services
+      systemd:
+        daemon_reload: true
+        name: "{{ item }}"
+        enabled: true
+        state: restarted
+      loop:
+        - lnbits
+        - timechain-webhook
+      tags: app
