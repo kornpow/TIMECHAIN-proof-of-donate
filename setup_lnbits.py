@@ -33,7 +33,7 @@ from pathlib import Path
 import requests
 
 LNBITS_URL = "http://localhost:5001"
-LNBITS_PUBLIC_URL = "https://soos-macbook-pro-2.tailb5a2b.ts.net"
+LNBITS_PUBLIC_URL = "https://timechain.win"
 WEBHOOK_URL = "http://localhost:8000/webhook"
 STATE_FILE = Path(__file__).parent / ".lnbits-state.json"
 LNBITS_PKG_DIR = Path.home() / ".local/share/uv/tools/lnbits/lib/python3.13/site-packages"

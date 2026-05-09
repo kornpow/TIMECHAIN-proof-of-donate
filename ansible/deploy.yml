@@ -21,7 +21,7 @@
     app_user: pi
     app_dir: /home/pi/timechain_project
     python_version: "3.13"
-    cloudflare_tunnel_id: ""   # fill in after: cloudflared tunnel create timechain
+    cloudflare_tunnel_id: "dcfbf63a-3fb7-4fc5-8759-f46bba7bb77f"
 
   tasks:
 
@@ -210,9 +210,9 @@
           tunnel: {{ cloudflare_tunnel_id }}
           credentials-file: /home/{{ app_user }}/.cloudflared/credentials.json
           ingress:
-            - hostname: timechain.dev
+            - hostname: timechain.win
               service: http://localhost:5001
-            - hostname: pay.timechain.dev
+            - hostname: pay.timechain.win
               service: http://localhost:5001
             - service: http_status:404
       tags: app
