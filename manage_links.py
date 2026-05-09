@@ -74,8 +74,8 @@ def cmd_list(args):
         enabled = "enabled" if not ll.get("is_unique") else "disabled"
         # LNbits uses `is_unique` oddly — check via `served_meta` or just show from local
         desc = ll.get("description") or l["description"]
-        min_s = int(ll.get("min", l["min_sats"]))
-        max_s = int(ll.get("max", l["max_sats"]))
+        min_s = int(ll.get("min", l.get("min_sats", 1)))
+        max_s = int(ll.get("max", l.get("max_sats", 1000000)))
         print(f"{l['slot']:>4}  {lid:>8}  {desc:<20}  {min_s:>8}  {max_s:>10}  {'on':<8}  {l['lightning_address']}")
     print()
 
@@ -100,7 +100,7 @@ def cmd_update(args):
     payload = {
         "description": args.description or current.get("description", slot["description"]),
         "min":         args.min if args.min is not None else current.get("min", slot["min_sats"]),
-        "max":         args.max if args.max is not None else current.get("max", slot["max_sats"]),
+        "max":         args.max if args.max is not None else current.get("max", slot.get("max_sats", 1000000)),
         "username":    args.username or current.get("username", slot["username"]),
         "domain":      current.get("domain", "soos-macbook-pro-2.tailb5a2b.ts.net"),
         "webhook_url": args.webhook or current.get("webhook_url", slot["webhook_url"]),
@@ -145,7 +145,7 @@ def _set_enabled(slot_num: int, enabled: bool):
     payload = {
         "description":  current.get("description", slot["description"]),
         "min":          current.get("min", slot["min_sats"]),
-        "max":          current.get("max", slot["max_sats"]),
+        "max":          current.get("max", slot.get("max_sats", 1000000)),
         "username":     current.get("username", slot["username"]),
         "domain":       current.get("domain", "soos-macbook-pro-2.tailb5a2b.ts.net"),
         "webhook_url":  current.get("webhook_url", slot["webhook_url"]),
