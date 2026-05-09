@@ -34,12 +34,6 @@
           - curl
           - ca-certificates
 
-          # ── Build tools (uv downloads Python 3.13 and compiles deps) ─────
-          - build-essential
-          - libffi-dev
-          - libssl-dev
-          - pkg-config
-
           # ── pygame / SDL2 audio ───────────────────────────────────────────
           - libsdl2-2.0-0
           - libsdl2-mixer-2.0-0
