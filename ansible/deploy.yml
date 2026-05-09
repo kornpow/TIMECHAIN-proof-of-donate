@@ -20,7 +20,6 @@
   vars:
     app_user: pi
     app_dir: /home/pi/timechain_project
-    ishelly_dir: /home/pi/ishelly
     python_version: "3.13"
 
   tasks:
@@ -30,15 +29,41 @@
     - name: Install system dependencies
       apt:
         name:
+          # ── Core tools ────────────────────────────────────────────────────
           - git
           - curl
           - ca-certificates
-          - libsdl2-mixer-2.0-0   # pygame audio
+
+          # ── Build tools (uv downloads Python 3.13 and compiles deps) ─────
+          - build-essential
+          - libffi-dev
+          - libssl-dev
+          - pkg-config
+
+          # ── pygame / SDL2 audio ───────────────────────────────────────────
           - libsdl2-2.0-0
-          - bluez                  # Bluetooth
-          - python3-dbus           # BT dbus bindings
+          - libsdl2-mixer-2.0-0
+          - libsdl2-image-2.0-0
+          - libsdl2-ttf-2.0-0
+
+          # ── Bluetooth ─────────────────────────────────────────────────────
+          - bluez                        # BT daemon + bluetoothctl
+          - bluetooth                    # service wrapper
+          - pulseaudio                   # audio server (required for BT audio on Pi)
+          - pulseaudio-module-bluetooth  # BT sink/source for pulseaudio
+          - python3-dbus                 # dbus bindings for BT pairing
+
+          # ── Misc ─────────────────────────────────────────────────────────
+          - openssl                      # LNbits TLS
+          - libpq-dev                    # optional LNbits postgres driver
         state: present
         update_cache: true
+
+    - name: Enable and start bluetooth service
+      systemd:
+        name: bluetooth
+        enabled: true
+        state: started
 
     # ── uv ────────────────────────────────────────────────────────────────────
 
