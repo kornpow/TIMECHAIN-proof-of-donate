@@ -214,6 +214,8 @@
               service: http://localhost:5001
             - hostname: pay.timechain.win
               service: http://localhost:5001
+            - hostname: webhook.timechain.win
+              service: http://localhost:8000
             - service: http_status:404
       tags: app
 
