@@ -77,6 +77,7 @@ def cmd_list(args):
         min_s = int(ll.get("min", l.get("min_sats", 1)))
         max_s = int(ll.get("max", l.get("max_sats", 1000000)))
         print(f"{l['slot']:>4}  {lid:>8}  {desc:<20}  {min_s:>8}  {max_s:>10}  {'on':<8}  {l['lightning_address']}")
+        print(f"            {l['lnurl']}")
     print()
 
 
