@@ -17,3 +17,4 @@ wheels/
 lnbits-data/
 .env
 lnd-tls.cert
+lnbits-backup/
