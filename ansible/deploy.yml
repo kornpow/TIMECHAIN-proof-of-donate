@@ -1,5 +1,5 @@
 ---
-# TIMECHAIN — Raspberry Pi deployment
+# TIMECHAIN — Debian x64 deployment
 # Installs LNbits + webhook server as systemd services.
 #
 # Prerequisites on your Mac:
@@ -13,13 +13,13 @@
 # Re-deploy after code changes:
 #   ansible-playbook -i ansible/inventory.ini ansible/deploy.yml --tags app
 
-- name: Deploy TIMECHAIN to Raspberry Pi
+- name: Deploy TIMECHAIN to Debian x64
   hosts: timechain
   become: true
 
   vars:
-    app_user: pi
-    app_dir: /home/pi/timechain_project
+    app_user: timechain
+    app_dir: /home/timechain/timechain_project
     python_version: "3.13"
     cloudflare_tunnel_id: "dcfbf63a-3fb7-4fc5-8759-f46bba7bb77f"
 
