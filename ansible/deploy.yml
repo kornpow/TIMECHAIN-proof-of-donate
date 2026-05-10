@@ -18,8 +18,9 @@
   become: true
 
   vars:
-    app_user: timechain
-    app_dir: /home/timechain/timechain_project
+    app_user: spore
+    app_dir: /home/spore/timechain_project
+    tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
     python_version: "3.13"
     cloudflare_tunnel_id: "dcfbf63a-3fb7-4fc5-8759-f46bba7bb77f"
 
@@ -48,11 +49,42 @@
           - pulseaudio-module-bluetooth  # BT sink/source for pulseaudio
           - python3-dbus                 # dbus bindings for BT pairing
 
+          # ── coincurve / secp256k1 (lnbits dep, needs cmake to build) ─────
+          - cmake
+          - libsecp256k1-dev
+          - build-essential
+          - pkg-config
+          - python3-dev
+
           # ── Misc ─────────────────────────────────────────────────────────
           - openssl                      # LNbits TLS
           - libpq-dev                    # optional LNbits postgres driver
         state: present
         update_cache: true
+
+    # ── Tailscale ─────────────────────────────────────────────────────────────
+
+    - name: Add Tailscale apt key and repo
+      shell: |
+        curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg > /dev/null
+        curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+      args:
+        creates: /etc/apt/sources.list.d/tailscale.list
+
+    - name: Install tailscale
+      apt:
+        name: tailscale
+        state: present
+        update_cache: true
+
+    - name: Enable and start tailscaled
+      systemd:
+        name: tailscaled
+        enabled: true
+        state: started
+
+    - name: Authenticate tailscale
+      shell: tailscale up --authkey {{ tailscale_auth_key }} --accept-routes
 
     - name: Enable and start bluetooth service
       systemd:
@@ -113,11 +145,11 @@
 
     # ── Sync .env into LNbits package dir ────────────────────────────────────
 
-    - name: Find LNbits data dir
+    - name: Find LNbits package dir
       become: false
       shell: |
         export PATH="$HOME/.local/bin:$PATH"
-        dirname $(uv tool run lnbits --help 2>&1; find /home/{{ app_user }}/.local -name "lnbits" -type f 2>/dev/null | head -1)
+        find /home/{{ app_user }}/.local/share/uv -path "*/lnbits/lib/*/site-packages" -type d | head -1
       register: lnbits_bin
       changed_when: false
 
@@ -125,8 +157,7 @@
       become: false
       shell: |
         export PATH="$HOME/.local/bin:$PATH"
-        LNBITS_DIR=$(find /home/{{ app_user }}/.local/share/uv -name "data.db" 2>/dev/null | head -1 | xargs dirname 2>/dev/null || \
-                     find /home/{{ app_user }}/.local/share/uv -path "*/lnbits/lib/*/site-packages" -type d | head -1)
+        LNBITS_DIR=$(find /home/{{ app_user }}/.local/share/uv -path "*/lnbits/lib/*/site-packages" -type d | head -1)
         cp {{ app_dir }}/.env "$LNBITS_DIR/.env"
       tags: app
 
@@ -143,7 +174,7 @@
 
           [Service]
           User={{ app_user }}
-          WorkingDirectory={{ app_dir }}
+          WorkingDirectory=/home/{{ app_user }}/.local/share/uv/tools/lnbits/lib/python3.13/site-packages
           Environment="PATH=/home/{{ app_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
           ExecStart=/home/{{ app_user }}/.local/bin/uv tool run lnbits --port 5001
           Restart=always
@@ -185,12 +216,19 @@
         path: /usr/local/bin/cloudflared
       register: cloudflared_bin
 
-    - name: Download cloudflared (arm64)
+    - name: Download cloudflared (amd64)
       get_url:
-        url: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
+        url: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
         dest: /usr/local/bin/cloudflared
         mode: "0755"
       when: not cloudflared_bin.stat.exists
+
+    - name: Create .cloudflared directory
+      become: false
+      file:
+        path: /home/{{ app_user }}/.cloudflared
+        state: directory
+        mode: "0700"
 
     - name: Copy cloudflared tunnel credentials
       become: false
@@ -220,9 +258,24 @@
       tags: app
 
     - name: Install cloudflared systemd service
-      shell: cloudflared service install
-      args:
-        creates: /etc/systemd/system/cloudflared.service
+      copy:
+        dest: /etc/systemd/system/cloudflared.service
+        content: |
+          [Unit]
+          Description=Cloudflare Tunnel
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          User={{ app_user }}
+          ExecStart=/usr/local/bin/cloudflared tunnel --config /home/{{ app_user }}/.cloudflared/config.yml run
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
 
     # ── Enable & start services ───────────────────────────────────────────────
 
