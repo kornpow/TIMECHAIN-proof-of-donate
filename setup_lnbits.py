@@ -106,9 +106,10 @@ def activate_extension(token: str) -> None:
 
 def create_paylink(admin_key: str) -> dict:
     print("Step 5: Creating LNURL paylink...")
+    headers = {"X-Api-Key": admin_key, "Content-Type": "application/json"}
     r = requests.post(
         f"{LNBITS_URL}/lnurlp/api/v1/links",
-        headers={"X-Api-Key": admin_key, "Content-Type": "application/json"},
+        headers=headers,
         json={
             "description": "Donate sats to trigger the music!",
             "min": 1,
@@ -123,6 +124,17 @@ def create_paylink(admin_key: str) -> dict:
     )
     if r.status_code in (200, 201):
         link = r.json()
+        print(f"  Paylink ID: {link['id']}")
+        return link
+    if r.status_code == 409:
+        print("  Paylink already exists — fetching existing link...")
+        r2 = requests.get(f"{LNBITS_URL}/lnurlp/api/v1/links", headers=headers)
+        r2.raise_for_status()
+        links = r2.json()
+        if not links:
+            print("ERROR: 409 conflict but no existing paylinks found")
+            sys.exit(1)
+        link = links[0]
         print(f"  Paylink ID: {link['id']}")
         return link
     print(f"ERROR creating paylink: {r.status_code} {r.text}")
