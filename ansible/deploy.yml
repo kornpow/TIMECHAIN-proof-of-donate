@@ -290,6 +290,25 @@
           [Install]
           WantedBy=multi-user.target
 
+    # ── Shelly: permanent auto_off safety timer ───────────────────────────────
+
+    - name: Configure Shelly outlet auto_off (2s hardware safety timer)
+      become: false
+      uri:
+        url: "http://{{ shelly_host }}/rpc/Switch.SetConfig"
+        method: POST
+        body_format: json
+        body:
+          id: 0
+          config:
+            auto_off: true
+            auto_off_delay: 2
+        status_code: [200]
+      vars:
+        shelly_host: "172.16.4.55"
+      ignore_errors: true   # non-fatal if Shelly unreachable during deploy
+      tags: app
+
     # ── Sudoers: allow spore to restart services without password ─────────────
 
     - name: Allow spore to restart TIMECHAIN services without password

@@ -52,20 +52,18 @@ _seen_hashes: set[str] = set()
 def pulse_outlet(seconds: float = OUTLET_PULSE_SECONDS) -> None:
     """Turn the Shelly outlet on for `seconds`, then off.
 
-    Uses Shelly's hardware Auto_off timer as a safety net — even if this
-    process is killed mid-pulse the outlet will cut power on its own.
-    The explicit software off call still runs after the sleep as a belt-and-suspenders.
+    The Shelly is permanently configured with auto_off=true, auto_off_delay=2s
+    via Switch.SetConfig, so the hardware cuts power even if this process dies.
+    The explicit software off call is belt-and-suspenders.
     """
     try:
-        # Belt: hardware timer guarantees off even if process dies
         httpx.post(
             f"http://{SHELLY_HOST}/rpc/Switch.Set",
-            json={"id": 0, "on": True, "Auto_off": True, "Auto_off_delay": seconds},
+            json={"id": 0, "on": True},
             timeout=3,
         )
-        print(f"Outlet ON ({seconds}s, Auto_off armed)")
+        print(f"Outlet ON ({seconds}s, hardware auto_off armed)")
         time.sleep(seconds + 0.5)
-        # Suspenders: explicit off after sleep in case Auto_off_delay drifts
         httpx.post(
             f"http://{SHELLY_HOST}/rpc/Switch.Set",
             json={"id": 0, "on": False},
