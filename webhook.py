@@ -11,7 +11,7 @@ if the LNbits→webhook call drops (e.g. LND invoice stream dropout over Tailsca
 
 Endpoints:
   POST /webhook   — called by LNbits on payment received
-  GET  /health    — stack health check
+  GET  /health    — stack health: shelly, lnbits, lnd, daemon, seen_hashes
   GET  /qr        — fullscreen QR donation page
   GET  /invoice   — create a bolt11 invoice for a given sat amount
 
@@ -35,7 +35,7 @@ import uvicorn
 
 app = FastAPI()
 
-SHELLY_HOST = "172.20.10.2"
+SHELLY_HOST = "172.16.4.55"
 OUTLET_PULSE_SECONDS = 2
 
 MP3_FILE = "timechain-song_this-is-no-me-there-is-no-you.mp3"
@@ -142,14 +142,57 @@ async def payment_webhook(request: Request):
 
 @app.get("/health")
 async def health():
+    result = {}
+
+    # Shelly outlet
     try:
-        import httpx as _httpx
-        r = _httpx.get(f"http://{SHELLY_HOST}/rpc/Switch.GetStatus?id=0", timeout=3)
-        outlet = "on" if r.json().get("output") else "off"
-    except Exception:
-        outlet = "unreachable"
-    daemon = send_control("status")
-    return {"outlet": outlet, "daemon": daemon}
+        async with httpx.AsyncClient(timeout=3) as client:
+            r = await client.get(f"http://{SHELLY_HOST}/rpc/Switch.GetStatus?id=0")
+        result["shelly"] = "on" if r.json().get("output") else "off"
+    except Exception as e:
+        result["shelly"] = f"unreachable ({e})"
+
+    # LNbits
+    lnbits_url = "http://localhost:5001"
+    if STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            lnbits_url = state.get("lnbits_url", lnbits_url)
+        except Exception:
+            pass
+    try:
+        async with httpx.AsyncClient(timeout=3) as client:
+            r = await client.get(f"{lnbits_url}/api/v1/health")
+        result["lnbits"] = "ok" if r.status_code == 200 else f"http {r.status_code}"
+    except Exception as e:
+        result["lnbits"] = f"unreachable ({e})"
+
+    # LND (via LNbits wallet endpoint — requires invoice key)
+    if STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(
+                    f"{lnbits_url}/api/v1/wallet",
+                    headers={"X-Api-Key": state["invoice_key"]},
+                )
+            if r.status_code == 200:
+                balance_sats = r.json().get("balance", 0) // 1000
+                result["lnd"] = f"ok (balance: {balance_sats} sats)"
+            else:
+                result["lnd"] = f"http {r.status_code}"
+        except Exception as e:
+            result["lnd"] = f"unreachable ({e})"
+    else:
+        result["lnd"] = "unconfigured (no state file)"
+
+    # BT speaker daemon
+    result["daemon"] = send_control("status")
+
+    # Poller state
+    result["seen_hashes"] = len(_seen_hashes)
+
+    return result
 
 
 # ── QR donation page ──────────────────────────────────────────────────────────
