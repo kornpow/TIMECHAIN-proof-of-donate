@@ -29,8 +29,6 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-from ishelly.client import ShellyPlug
-from ishelly.components.switch import SwitchSetParams
 import uvicorn
 
 app = FastAPI()
@@ -52,13 +50,27 @@ _seen_hashes: set[str] = set()
 # ── Shelly outlet ─────────────────────────────────────────────────────────────
 
 def pulse_outlet(seconds: float = OUTLET_PULSE_SECONDS) -> None:
-    """Turn the Shelly outlet on, wait, then turn it off."""
+    """Turn the Shelly outlet on for `seconds`, then off.
+
+    Uses Shelly's hardware Auto_off timer as a safety net — even if this
+    process is killed mid-pulse the outlet will cut power on its own.
+    The explicit software off call still runs after the sleep as a belt-and-suspenders.
+    """
     try:
-        plug = ShellyPlug(SHELLY_HOST)
-        plug.switch.set(SwitchSetParams(id=0, on=True))
-        print(f"Outlet ON ({seconds}s)")
-        time.sleep(seconds)
-        plug.switch.set(SwitchSetParams(id=0, on=False))
+        # Belt: hardware timer guarantees off even if process dies
+        httpx.post(
+            f"http://{SHELLY_HOST}/rpc/Switch.Set",
+            json={"id": 0, "on": True, "Auto_off": True, "Auto_off_delay": seconds},
+            timeout=3,
+        )
+        print(f"Outlet ON ({seconds}s, Auto_off armed)")
+        time.sleep(seconds + 0.5)
+        # Suspenders: explicit off after sleep in case Auto_off_delay drifts
+        httpx.post(
+            f"http://{SHELLY_HOST}/rpc/Switch.Set",
+            json={"id": 0, "on": False},
+            timeout=3,
+        )
         print("Outlet OFF")
     except Exception as e:
         print(f"[outlet] error: {e}")
