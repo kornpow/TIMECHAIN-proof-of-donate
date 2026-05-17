@@ -33,7 +33,7 @@ from ishelly.components.switch import SwitchSetParams
 
 SYSTEM = platform.system()
 SOCKET_PATH = Path(__file__).parent / ".bt-speaker.sock"
-SHELLY_HOST = "172.20.10.2"
+SHELLY_HOST = "172.16.4.55"
 
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────

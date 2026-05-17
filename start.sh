@@ -161,9 +161,9 @@ cmd_play() {
 cmd_outlet() {
     local secs="${2:-5}"
     echo "Turning outlet ON for ${secs}s..."
-    curl -sf "http://172.20.10.2/rpc/Switch.Set" -d '{"id":0,"on":true}' > /dev/null
+    curl -sf "http://172.16.4.55/rpc/Switch.Set" -d '{"id":0,"on":true}' > /dev/null
     sleep "$secs"
-    curl -sf "http://172.20.10.2/rpc/Switch.Set" -d '{"id":0,"on":false}' > /dev/null
+    curl -sf "http://172.16.4.55/rpc/Switch.Set" -d '{"id":0,"on":false}' > /dev/null
     echo "Outlet off."
 }
 

@@ -194,7 +194,7 @@ uv run main.py daemon --list-devices
 | Device | Config |
 |---|---|
 | Bluetooth speaker | JBL Go 4 — MAC `90-f2-60-a7-d1-12` |
-| Smart outlet | Shelly Plus Plug US — `172.20.10.2` |
+| Smart outlet | Shelly Plus Plug US — `172.16.4.55` |
 
 To change these, edit `webhook.py` (`SPEAKER_MAC`) and `main.py` (`SHELLY_HOST`).
 
