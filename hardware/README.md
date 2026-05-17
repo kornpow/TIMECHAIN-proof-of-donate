@@ -191,7 +191,9 @@ Watch the Shelly's LED: solid green = on, off = standby.
 
 ## Photos
 
-See [`photos/`](photos/) for build photos.
+![Clock installed on wall with wiring](../media/IMG_9844.png)
+
+See [`photos/`](photos/) for additional build photos.
 
 ---
 

@@ -62,6 +62,8 @@ struck the hour naturally.
 against the existing gear with no drilling or gluing. The clock still keeps time
 and chimes normally on its own schedule.
 
+![The cuckoo clock with wiring](media/IMG_9844.png)
+
 See [`hardware/README.md`](hardware/README.md) for the full modification guide,
 wiring diagram, and parts list.
 
