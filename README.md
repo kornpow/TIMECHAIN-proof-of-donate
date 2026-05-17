@@ -219,7 +219,7 @@ Examples:
 | Device | Details |
 |---|---|
 | Cuckoo clock | Any standard cuckoo clock — see [`hardware/README.md`](hardware/README.md) |
-| Electromagnet | ~$11 on Amazon, 12V DC pull-type — link TBD |
+| Electromagnet | [Baomain BM-0530B](https://www.amazon.com/dp/B01K41EZAU?th=1) — DC 12V, 950mA, 5N, 10mm stroke, ~$8 |
 | 12V ~2A power supply | Barrel jack (5.5mm × 2.1mm), center positive |
 | Bluetooth speaker | JBL Go 4 — MAC `90-f2-60-a7-d1-12` |
 | Smart outlet | Shelly Plus Plug US — `172.16.4.55` |
