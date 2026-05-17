@@ -18,3 +18,4 @@ lnbits-data/
 .env
 lnd-tls.cert
 lnbits-backup/
+cloudflare-tunnel-credentials.json
