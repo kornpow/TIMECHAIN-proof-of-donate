@@ -189,6 +189,85 @@ Watch the Shelly's LED: solid green = on, off = standby.
 
 ---
 
+## v2 Build — Self-Contained (No Wall Outlet)
+
+The v1 build requires a wall outlet and a 12V PSU brick. A cleaner alternative
+eliminates both by switching to a Shelly that accepts 12V DC directly and adding
+a small 12V battery — the entire electrical system lives inside or behind the clock.
+
+### Why This Is Better
+
+| | v1 (current) | v2 (self-contained) |
+|---|---|---|
+| Shelly device | Shelly Plus Plug US (120V AC) | Shelly 1 Mini Gen4 (12V DC) |
+| Power path | Wall outlet → PSU → magnet | 12V battery → Shelly → magnet |
+| PSU brick | Required | Eliminated |
+| Wall outlet | Required | Not needed (only Pi needs power) |
+| Concealable | No — large wall plug | Yes — fits inside clock body |
+
+### Recommended Device
+
+**[Shelly 1 Mini Gen4](https://www.shelly.com/en-us/products/shop/shelly-1-mini-gen4)** — ~$25
+
+- Power input: **12–24V DC** (or 100–240V AC — but use DC here)
+- Relay output: up to 8A — well above the electromagnet's 950mA draw
+- Size: ~28 × 35mm — easily hidden behind the clock's back panel
+- Same Gen2 RPC API — **no code changes needed**; `ishelly` works identically
+
+### Battery
+
+A **12V 1Ah sealed lead-acid (SLA)** battery (~$15) is a simple, safe choice:
+
+- The electromagnet draws 950mA but only for ~1–2 seconds per chime
+- A 1Ah battery at 50% depth of discharge = ~500 mAh usable ÷ ~20mAs per chime
+  ≈ **~1,500 chimes** between charges (days to weeks of normal use)
+- Add a small 12V trickle charger and the battery stays topped up permanently
+
+Alternatively, a **3S LiPo (11.1V nominal, 12.6V full)** with a BMS is more
+compact but requires more careful handling.
+
+### Revised Wiring (v2)
+
+```
+12V battery
+    └── Shelly 1 Mini Gen4  (switched on/off via WiFi HTTP API)
+            └── Electromagnet
+                    └── Mounted against chime gear inside cuckoo clock
+```
+
+### Revised Parts List (v2)
+
+| Part | Details | Approx. Cost |
+|---|---|---|
+| Cuckoo clock | Any standard cuckoo clock with a gear-driven chime mechanism | varies |
+| Electromagnet | [Baomain BM-0530B (JF-0530B)](https://www.amazon.com/dp/B01K41EZAU?th=1) — DC 12V, 950mA, 5N force, 10mm stroke | ~$8 |
+| 12V 1Ah SLA battery | Standard sealed lead-acid, e.g. YUASA NP1-12 or equivalent | ~$15 |
+| 12V trickle charger | 300–500mA float charger | ~$10 |
+| Shelly 1 Mini Gen4 | Tiny relay, 12V DC input, WiFi, same RPC API | ~$25 |
+| Mounting hardware | Small screws or zip ties | ~$1 |
+
+**Total estimated cost (excluding clock): ~$59** (vs ~$44 for v1, but no outlet required)
+
+### Code Changes for v2
+
+None. The `ishelly` API is identical across all Shelly Gen2/Gen3/Gen4 devices.
+Only the `SHELLY_HOST` IP needs to point to the new device after WiFi setup.
+
+The `auto_off` safety timer applies the same way:
+
+```python
+from ishelly.client import ShellyPlug
+from ishelly.components.switch import SwitchSetConfigParams, SwitchConfig
+
+p = ShellyPlug("172.16.4.55")  # update IP to match your Shelly 1 Mini
+p.switch.set_config(SwitchSetConfigParams(
+    id=0,
+    config=SwitchConfig(auto_off=True, auto_off_delay=2)
+))
+```
+
+---
+
 ## Photos
 
 ![Clock installed on wall with wiring](../media/IMG_9844.png)
