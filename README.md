@@ -1,10 +1,16 @@
 # TIMECHAIN — Proof of Donate
 
-Donate sats over Lightning → music plays on a Bluetooth speaker → Shelly outlet turns on.
+Donate sats over Lightning → a cuckoo clock chimes + music plays on a Bluetooth speaker.
 
 **Rate: 1 sat = 1 second of music.**
 
 Built with Python, LNbits, pygame, blueutil, and ishelly.
+
+---
+
+## Demo
+
+> **[Demo video coming soon]** — see [`media/`](media/) to contribute one.
 
 ---
 
@@ -28,13 +34,109 @@ open http://localhost:8000/qr        # macOS
 xdg-open http://localhost:8000/qr   # Linux
 ```
 
-That's it. Stack is up. Donors scan the QR code, sats flow, music plays.
+That's it. Stack is up. Donors scan the QR code, sats flow, the clock chimes, music plays.
+
+---
+
+## How It Works
+
+1. **LNbits** runs a local Lightning wallet with a LNURL paylink
+2. A donor scans the QR code and sends sats
+3. LNbits fires a **webhook** to our FastAPI server (`/webhook`)
+4. The webhook starts the **bt-speaker daemon**, playing the MP3 over Bluetooth
+   for exactly as many seconds as sats paid
+5. The **Shelly Plus Plug US** outlet turns on for the duration of playback, then turns off
+6. The Shelly powers a **12V electromagnet** mounted inside the cuckoo clock —
+   the magnet pulls the chime gear, triggering the full cuckoo chime cycle
+
+---
+
+## The Clock
+
+A standard cuckoo clock is modified with an externally-mounted electromagnet.
+When the Shelly outlet turns on, the electromagnet pulls on the clock's chime
+gear, triggering the cuckoo to come out and cycle — exactly as if the clock had
+struck the hour naturally.
+
+**The clock mechanism is not permanently modified.** The electromagnet mounts
+against the existing gear with no drilling or gluing. The clock still keeps time
+and chimes normally on its own schedule.
+
+See [`hardware/README.md`](hardware/README.md) for the full modification guide,
+wiring diagram, and parts list.
+
+---
+
+## Full Recreation Guide
+
+Follow these steps in order to go from scratch to a fully operational installation.
+
+### Step 1 — Assemble the hardware
+
+Buy the parts, mount the electromagnet, wire it to the Shelly outlet.
+
+→ [`hardware/README.md`](hardware/README.md)
+
+### Step 2 — Generate minimal LND credentials
+
+Bake a restricted macaroon. Never use `admin.macaroon` in production.
+
+→ [`docs/lnd-credentials.md`](docs/lnd-credentials.md)
+
+### Step 3 — Set up Tailscale
+
+Join both your LND node and the deployment server to the same tailnet so LNbits
+can reach LND privately.
+
+→ [`docs/tailscale.md`](docs/tailscale.md)
+
+### Step 4 — Set up the Cloudflare tunnel
+
+LNURL payments require a public HTTPS domain. The Cloudflare tunnel exposes
+LNbits without opening any firewall ports.
+
+→ [`docs/cloudflare-tunnel.md`](docs/cloudflare-tunnel.md)
+
+### Step 5 — Configure .env
+
+```bash
+cp ansible/env.example .env
+# Fill in: LND_REST_ENDPOINT, LND_REST_MACAROON, LNBITS_PUBLIC_URL
+```
+
+### Step 6 — Deploy with Ansible
+
+Installs LNbits, the webhook server, Tailscale, and the Cloudflare tunnel as
+systemd services on a Debian server (e.g. Raspberry Pi).
+
+```bash
+brew install ansible
+ansible-galaxy collection install community.general
+export TAILSCALE_AUTH_KEY=tskey-auth-...
+ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+```
+
+### Step 7 — Initialize LNbits
+
+First run only — creates the wallet, LNURL paylink, and webhook registration:
+
+```bash
+uv run setup_lnbits.py
+```
+
+### Step 8 — Test
+
+```bash
+./test_payment.sh 21   # simulate a 21-sat payment
+```
+
+The clock should chime and music should play for 21 seconds.
 
 ---
 
 ## Sending Test Payments
 
-You don't need a real Lightning wallet to test. The webhook server accepts plain HTTP POSTs, so you can simulate any payment amount with curl:
+You don't need a real Lightning wallet to test. Simulate any payment amount with curl:
 
 ```bash
 # Simulate a 10-sat payment (10 seconds of music)
@@ -62,7 +164,7 @@ Or use the included helper script:
 ./test_payment.sh 100    # send 100 sats
 ```
 
-To test without Bluetooth (no speaker) and without the Shelly outlet, start the daemon manually with --no-connect and --no-outlet:
+To test without Bluetooth (no speaker) and without the Shelly outlet:
 
 ```bash
 uv run main.py daemon \
@@ -92,8 +194,8 @@ Examples:
 
 ```bash
 ./start.sh play 30       # play 30 seconds of music
-./start.sh outlet        # toggle outlet on for 5 seconds
-./start.sh outlet 10     # toggle outlet on for 10 seconds
+./start.sh outlet        # toggle outlet on for 5 seconds (triggers clock chime)
+./start.sh outlet 2      # toggle outlet on for 2 seconds
 ./start.sh status        # show what's running + health check
 ./start.sh logs          # tail /tmp/lnbits.log + /tmp/webhook.log + /tmp/daemon.log
 ```
@@ -107,18 +209,23 @@ Examples:
 | `http://localhost:5001` | LNbits wallet UI |
 | `http://localhost:8000/qr` | Fullscreen QR donation page — shows LNURL by default, toggle to bolt11 invoice |
 | `http://localhost:8000/invoice?amount=21` | GET — generates a fresh single-use bolt11 invoice for 21 sats |
-| `http://localhost:8000/health` | Playback status — returns `{"daemon": "playing" | "paused" | "idle"}` |
+| `http://localhost:8000/health` | Playback status — returns `{"daemon": "playing" \| "paused" \| "idle"}` |
 | `http://localhost:8000/webhook` | LNbits payment webhook (POST, body: `{"amount": <msat>}`) |
 
 ---
 
-## How It Works
+## Hardware
 
-1. **LNbits** runs a local Lightning wallet with a LNURL paylink
-2. A donor scans the QR code and sends sats
-3. LNbits fires a **webhook** to our FastAPI server (`/webhook`)
-4. The webhook starts the **bt-speaker daemon**, playing the MP3 over Bluetooth for exactly as many seconds as sats paid
-5. The **Shelly Plus Plug US** outlet turns on for the duration of playback, then turns off
+| Device | Details |
+|---|---|
+| Cuckoo clock | Any standard cuckoo clock — see [`hardware/README.md`](hardware/README.md) |
+| Electromagnet | ~$11 on Amazon, 12V DC pull-type — link TBD |
+| 12V ~2A power supply | Barrel jack (5.5mm × 2.1mm), center positive |
+| Bluetooth speaker | JBL Go 4 — MAC `90-f2-60-a7-d1-12` |
+| Smart outlet | Shelly Plus Plug US — `172.16.4.55` |
+
+To change the speaker MAC or Shelly IP, edit `webhook.py` (`SPEAKER_MAC`) and
+`main.py` (`SHELLY_HOST`).
 
 ---
 
@@ -153,15 +260,19 @@ LNBITS_USERNAME=admin LNBITS_PASSWORD=yourpass uv run setup_lnbits.py
 
 ### Wallet Backends
 
-The default `.env` uses **FakeWallet** — no real Lightning node required, perfect for development and testing.
+The default `.env` uses **FakeWallet** — no real Lightning node required, perfect
+for development and testing.
 
 For a real Lightning node, update `.env`:
 ```
 LNBITS_BACKEND_WALLET_CLASS=LndRestWallet
-LND_REST_ENDPOINT=https://127.0.0.1:8080
-LND_REST_CERT=/path/to/tls.cert
-LND_REST_MACAROON=/path/to/admin.macaroon
+LND_REST_ENDPOINT=https://100.x.x.x:8080   # Tailscale IP of your LND node
+LND_REST_MACAROON=<hex-encoded baked macaroon>
+LND_REST_CERT=                              # managed by Ansible — leave blank
 ```
+
+See [`docs/lnd-credentials.md`](docs/lnd-credentials.md) for how to bake the
+macaroon and [`docs/tailscale.md`](docs/tailscale.md) for reaching your node.
 
 ---
 
@@ -186,17 +297,6 @@ uv run main.py control status   # returns: playing | paused | idle
 # List paired Bluetooth devices
 uv run main.py daemon --list-devices
 ```
-
----
-
-## Hardware
-
-| Device | Config |
-|---|---|
-| Bluetooth speaker | JBL Go 4 — MAC `90-f2-60-a7-d1-12` |
-| Smart outlet | Shelly Plus Plug US — `172.16.4.55` |
-
-To change these, edit `webhook.py` (`SPEAKER_MAC`) and `main.py` (`SHELLY_HOST`).
 
 ---
 
@@ -230,13 +330,18 @@ blueutil --paired       # list already-paired devices
 - **macOS**: if audio doesn't route automatically, pass `--audio-device "Your Speaker Name"` to the daemon
 - `blueutil --connect` has a 15-second timeout per attempt; if the speaker is already connected it skips straight to playback
 
+---
 
+## LND Credentials
 
-## LND Creds
+Generate a minimal macaroon — never use `admin.macaroon` in production:
 
-```
+```bash
 lncli bakemacaroon \
   invoices:read invoices:write \
   info:read \
   offchain:read offchain:write
 ```
+
+See [`docs/lnd-credentials.md`](docs/lnd-credentials.md) for the full guide
+including hex export, TLS cert setup, and `.env` configuration.
