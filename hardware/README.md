@@ -102,23 +102,46 @@ the device) and assign it a permanent IP. The project uses `172.16.4.55`.
 
 Update `SHELLY_HOST` in `main.py` and `start.sh` to match whatever IP you assign.
 
-### HTTP API
+### Python API (ishelly)
 
-The Shelly Plus uses the **Shelly RPC API** (Gen2). All calls are plain HTTP POSTs:
+This project uses the [`ishelly`](https://pypi.org/project/ishelly/) library
+(already a dependency) rather than raw curl. The pattern used in `main.py`:
 
-```bash
+```python
+from ishelly.client import ShellyPlug
+from ishelly.components.switch import SwitchSetParams
+
+p = ShellyPlug("172.16.4.55")
+
 # Turn ON
-curl -X POST http://172.16.4.55/rpc/Switch.Set \
-  -H "Content-Type: application/json" \
-  -d '{"id":0,"on":true}'
+p.switch.set(SwitchSetParams(id=0, on=True))
 
 # Turn OFF
-curl -X POST http://172.16.4.55/rpc/Switch.Set \
-  -H "Content-Type: application/json" \
-  -d '{"id":0,"on":false}'
+p.switch.set(SwitchSetParams(id=0, on=False))
 
 # Get current state
-curl http://172.16.4.55/rpc/Switch.GetStatus?id=0
+status = p.switch.get_status(id=0)
+print(status)
+```
+
+Run a quick interactive test from the project root:
+
+```bash
+uv run python -c "
+from ishelly.client import ShellyPlug
+from ishelly.components.switch import SwitchSetParams
+p = ShellyPlug('172.16.4.55')
+p.switch.set(SwitchSetParams(id=0, on=True))
+import time; time.sleep(1)
+p.switch.set(SwitchSetParams(id=0, on=False))
+print('done')
+"
+```
+
+Or use the built-in helper:
+
+```bash
+./start.sh outlet 1   # on for 1 second via ishelly
 ```
 
 ### Safety: auto_off Timer
@@ -127,20 +150,27 @@ The Shelly is configured with a hardware `auto_off` timer as a failsafe — if
 the software crashes mid-pulse, the outlet turns itself off after 2 seconds
 rather than leaving the electromagnet energized indefinitely.
 
-Set it once manually, or let the Ansible playbook handle it automatically:
+The Ansible playbook sets this automatically. To set it manually with ishelly:
 
-```bash
-curl -X POST http://172.16.4.55/rpc/Switch.SetConfig \
-  -H "Content-Type: application/json" \
-  -d '{"id":0,"config":{"auto_off":true,"auto_off_delay":2}}'
+```python
+from ishelly.client import ShellyPlug
+from ishelly.components.switch import SwitchSetConfigParams, SwitchConfig
+
+p = ShellyPlug("172.16.4.55")
+p.switch.set_config(SwitchSetConfigParams(
+    id=0,
+    config=SwitchConfig(auto_off=True, auto_off_delay=2)
+))
 ```
 
-Verify the config was saved:
+Or via the Ansible playbook (already configured in `ansible/deploy.yml`):
 
 ```bash
-curl http://172.16.4.55/rpc/Switch.GetConfig?id=0
-# Look for: "auto_off": true, "auto_off_delay": 2
+ansible-playbook -i ansible/inventory.ini ansible/deploy.yml --tags app
 ```
+
+Verify via the Shelly web UI at `http://172.16.4.55` → **Settings → Switch**,
+or check `p.switch.get_config(id=0)` returns `auto_off: true, auto_off_delay: 2`.
 
 ### Firmware
 
