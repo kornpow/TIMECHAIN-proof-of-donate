@@ -62,7 +62,9 @@ struck the hour naturally.
 against the existing gear with no drilling or gluing. The clock still keeps time
 and chimes normally on its own schedule.
 
-![The cuckoo clock with wiring](media/IMG_9844.png)
+![The cuckoo clock mounted on wall](media/clock-wall-front.png)
+![Back of clock showing wiring and DC connector](media/clock-back-wiring.jpg)
+![Power adapter (Facmogu 12V/5A)](media/power-adapter.jpg)
 
 See [`hardware/README.md`](hardware/README.md) for the full modification guide,
 wiring diagram, and parts list.

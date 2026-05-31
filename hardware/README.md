@@ -56,6 +56,27 @@ curl -X POST http://172.16.4.55/rpc/Switch.SetConfig \
 
 ---
 
+## How the Chime Mechanism Works
+
+The clock movement is powered by gravity. A 420 gram weight powers this 8-day
+cuckoo movement. An electromagnet is attached to the outside of the case below
+the cuckoo movement, connected to a smart switch that receives an impulse from a
+Bitcoin payment.
+
+When power is sent to the electromagnet, the **Pull-down rod (1)** is pulled.
+This lifts the **Rack Lift lever (4)**, which lifts the **Rack Hook (3)**,
+freeing the rack and enabling it to fall on the **Snail Wheel (2)**.
+
+The snail wheel has 12 shelves or levels. The lowest shelf is 12 o'clock (twelve
+cuckoos); the highest shelf is 1 o'clock (one cuckoo). As the **Rack Hook (5)**
+drops onto the snail wheel, it dictates how many cuckoos will be announced.
+
+When power is removed from the electromagnet, the cuckoo process starts.
+
+![Clock movement internals and rack/snail wheel diagram](../media/clock-mechanism-diagram.jpg)
+
+---
+
 ## Mounting the Electromagnet
 
 1. Open the back panel of the cuckoo clock to expose the gear mechanism
@@ -270,7 +291,9 @@ p.switch.set_config(SwitchSetConfigParams(
 
 ## Photos
 
-![Clock installed on wall with wiring](../media/IMG_9844.png)
+![Clock mounted on wall, front view](../media/clock-wall-front.png)
+![Back of clock showing wiring, chains, and DC barrel connector](../media/clock-back-wiring.jpg)
+![Power adapter — Facmogu 12V/5A 60W](../media/power-adapter.jpg)
 
 See [`photos/`](photos/) for additional build photos.
 
